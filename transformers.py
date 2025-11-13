@@ -192,6 +192,7 @@ class HighCorrelationDropper(BaseEstimator, TransformerMixin):
     
     def __init__(self, corr_threshold=0.9):
         self.corr_threshold = corr_threshold
+
     
     def fit(self, X, y=None):
         num_cols = X.select_dtypes(include=[np.number, np.bool_]).columns
@@ -204,3 +205,151 @@ class HighCorrelationDropper(BaseEstimator, TransformerMixin):
     
     def transform(self, X):
         return X.drop(columns=self.high_corr_cols_, errors='ignore')
+
+
+
+
+class WoETransformer(BaseEstimator, TransformerMixin):
+    """
+    Transformer zamieniający zmienne numeryczne na WoE względem y (default flag).
+    
+    Założenia:
+    - y = 1 -> 'bad' (default)
+    - y = 0 -> 'good' (brak defaultu)
+    
+    Działa w dwóch krokach:
+    1) dzieli każdą kolumnę na n_bins kwantylowych przedziałów (+ osobny bin na missing),
+    2) liczy WoE dla każdego binu i zapisuje słowniki mapowań.
+    """
+
+    def __init__(self, n_bins=5, eps=0.5):
+        """
+        n_bins: liczba binów kwantylowych (bez binu na brak)
+        eps: smoothing dodawany do liczników good/bad, żeby uniknąć WoE = +/- inf
+        """
+        self.n_bins = n_bins
+        self.eps = eps
+
+    def fit(self, X, y):
+        X = X.copy()
+        y = pd.Series(y)
+
+        # bierzemy tylko kolumny numeryczne (WoE ma sens głównie tam)
+        self.num_cols_ = X.select_dtypes(include=[np.number]).columns.tolist()
+
+        # globalne liczebności
+        self.total_good_ = (y == 0).sum()
+        self.total_bad_ = (y == 1).sum()
+
+        self.bin_edges_ = {}
+        self.woe_maps_ = {}
+        self.iv_ = {}
+
+        for col in self.num_cols_:
+            col_data = X[col]
+            df_tmp = pd.DataFrame({"x": col_data, "y": y})
+
+            # osobny bin na braki
+            missing_mask = df_tmp["x"].isna()
+
+            # kwantylowy binning na nie-missing
+            if (~missing_mask).sum() == 0:
+                # kolumna w całości pusta -> WoE = 0
+                self.bin_edges_[col] = None
+                self.woe_maps_[col] = {"MISSING": 0.0}
+                self.iv_[col] = 0.0
+                continue
+
+            try:
+                # retbins=True -> dostajemy krawędzie przedziałów
+                _, bins = pd.qcut(
+                    df_tmp.loc[~missing_mask, "x"],
+                    q=self.n_bins,
+                    duplicates="drop",
+                    retbins=True
+                )
+            except ValueError:
+                # za mało unikalnych wartości -> jeden bin
+                bins = np.unique(df_tmp.loc[~missing_mask, "x"])
+                if bins.size == 1:
+                    bins = np.array([bins[0] - 1e-6, bins[0] + 1e-6])
+
+            self.bin_edges_[col] = bins
+
+            # przypisanie binów
+            df_tmp["bin"] = pd.cut(
+                df_tmp["x"],
+                bins=bins,
+                include_lowest=True
+            )
+            df_tmp["bin"] = df_tmp["bin"].astype(object)
+
+            df_tmp.loc[missing_mask, "bin"] = "MISSING"
+
+            # agregacja good/bad per bin
+            grouped = df_tmp.groupby("bin")["y"]
+            good = (grouped.apply(lambda s: (s == 0).sum()) + self.eps)
+            bad = (grouped.apply(lambda s: (s == 1).sum()) + self.eps)
+
+            dist_good = good / (self.total_good_ + self.eps * len(good))
+            dist_bad = bad / (self.total_bad_ + self.eps * len(bad))
+
+            woe = np.log(dist_good / dist_bad)
+
+            # zapisujemy mapowanie: bin -> WoE
+            woe_map = woe.to_dict()
+            self.woe_maps_[col] = woe_map
+
+            # policz IV tej zmiennej (przyda się później do raportu)
+            iv_col = ((dist_good - dist_bad) * woe).sum()
+            self.iv_[col] = iv_col
+
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+
+        for col in self.num_cols_:
+            if col not in X.columns:
+                continue
+
+            col_data = X[col]
+            bins = self.bin_edges_[col]
+            woe_map = self.woe_maps_[col]
+
+            if bins is not None:
+                binned = pd.cut(
+                    col_data,
+                    bins=bins,
+                    include_lowest=True
+                ).astype(object)
+            else:
+                # kolumna była w całości missing przy fit
+                binned = pd.Series(["MISSING"] * len(X), index=X.index, dtype=object)
+
+            # missing -> "MISSING"
+            binned[col_data.isna()] = "MISSING"
+
+            # zamiana binów na WoE; nieznane biny -> 0.0
+            X[col] = binned.map(woe_map).fillna(0.0).astype(float)
+
+        return X
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

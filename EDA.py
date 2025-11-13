@@ -1,84 +1,160 @@
 import pandas as pd
 import numpy as np
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
+
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from transformers import *
-from sklearn.pipeline import Pipeline
 
-def create_preprocessing_pipeline(
-    missing_threshold=0.95,
-    lower_q=0.02,
-    upper_q=0.98,
-    scale_numeric=True,
-    var_threshold=0.01,
-    corr_threshold=0.9
-):
+from transformers import (
+    InfinityReplacer,
+    HighMissingDropper,
+    MissingIndicator,
+    CustomImputer,
+    Winsorizer,
+    LowVarianceDropper,
+    HighCorrelationDropper,
+    OneHotEncoder,
+    NumericScaler,   # może się jeszcze przydać, na razie nie używamy
+    WoETransformer   # NOWY transformer, musi być dodany w transformers.py
+)
+
+import joblib
+
+
+# ========= PIPELINE DLA DRZEWA DECYZYJNEGO =========
+
+def create_tree_preprocessing_pipeline(
+    missing_threshold: float = 0.95,
+    lower_q: float = 0.02,
+    upper_q: float = 0.98,
+    var_threshold: float = 0.01,
+    corr_threshold: float = 0.9,
+) -> Pipeline:
     """
-    Tworzy pipeline preprocesingu z zapisywaniem parametrów.
-    
-    Użycie:
-    -------
-    # Fitowanie na train
-    pipeline = create_preprocessing_pipeline()
-    X_train_transformed = pipeline.fit_transform(X_train)
-    
-    # Transformacja test/val z tymi samymi parametrami
-    X_test_transformed = pipeline.transform(X_test)
-    X_val_transformed = pipeline.transform(X_val)
+    Preprocessing pod drzewo:
+    - OneHotEncoder dla zmiennych kategorycznych
+    - zamiana inf na NaN
+    - wyrzucenie kolumn z ogromną liczbą braków
+    - dodanie wskaźników braków
+    - imputacja (median / most_frequent)
+    - winsoryzacja (obcięcie outlierów)
+    - wyrzucenie kolumn o bardzo małej wariancji
+    - wyrzucenie kolumn mocno skorelowanych
+    - BEZ skalowania (drzewo go nie potrzebuje)
     """
-    
     steps = [
-        ('one_hot', OneHotEncoder()),
-        ('inf_replacer', InfinityReplacer()),
-        ('drop_high_missing', HighMissingDropper(missing_threshold=missing_threshold)),
-        ('missing_indicator', MissingIndicator()),
-        ('imputer', CustomImputer()),
-        ('winsorizer', Winsorizer(lower_q=lower_q, upper_q=upper_q)),
-        ('drop_low_variance', LowVarianceDropper(var_threshold=var_threshold)),
-        ('drop_high_corr', HighCorrelationDropper(corr_threshold=corr_threshold)),
+        ("one_hot", OneHotEncoder()),
+        ("inf_replacer", InfinityReplacer()),
+        ("drop_high_missing", HighMissingDropper(missing_threshold=missing_threshold)),
+        ("missing_indicator", MissingIndicator()),
+        ("imputer", CustomImputer()),
+        ("winsorizer", Winsorizer(lower_q=lower_q, upper_q=upper_q)),
+        ("drop_low_variance", LowVarianceDropper(var_threshold=var_threshold)),
+        ("drop_high_corr", HighCorrelationDropper(corr_threshold=corr_threshold)),
     ]
-    
-    if scale_numeric:
-        steps.append(('scaler', NumericScaler()))
-    
+
     return Pipeline(steps)
 
 
-# ===== PRZYKŁAD UŻYCIA =====
+# ========= PIPELINE DLA REGRESJI LOGISTYCZNEJ (WoE) =========
+
+def create_logit_preprocessing_pipeline(
+    missing_threshold: float = 0.95,
+    lower_q: float = 0.02,
+    upper_q: float = 0.98,
+    var_threshold: float = 0.01,
+    corr_threshold: float = 0.9,
+    n_bins: int = 5,
+) -> Pipeline:
+    """
+    Preprocessing pod regresję logistyczną z WoE:
+    - OneHotEncoder (na razie zostawiamy, bo drzewo też go ma; można później uprościć)
+    - zamiana inf na NaN
+    - wyrzucenie kolumn z ogromną liczbą braków
+    - dodanie wskaźników braków
+    - imputacja (median / most_frequent)
+    - winsoryzacja
+    - wyrzucenie kolumn o bardzo małej wariancji
+    - WoETransformer (binning + WoE na zmiennych numerycznych)
+    - wyrzucenie kolumn mocno skorelowanych JUŻ po WoE
+    - BEZ skalowania (WoE jest już na sensownej skali)
+    """
+    steps = [
+        ("one_hot", OneHotEncoder()),
+        ("inf_replacer", InfinityReplacer()),
+        ("drop_high_missing", HighMissingDropper(missing_threshold=missing_threshold)),
+        ("missing_indicator", MissingIndicator()),
+        ("imputer", CustomImputer()),
+        ("winsorizer", Winsorizer(lower_q=lower_q, upper_q=upper_q)),
+        ("drop_low_variance", LowVarianceDropper(var_threshold=var_threshold)),
+        ("woe", WoETransformer(n_bins=n_bins)),
+        ("drop_high_corr", HighCorrelationDropper(corr_threshold=corr_threshold)),
+    ]
+
+    return Pipeline(steps)
+
+
+# ========= GŁÓWNY BLOK: PODZIAŁ DANYCH + FITOWANIE PIPELINE’ÓW =========
 
 if __name__ == "__main__":
-    # Wczytanie danych
+    # 1. Wczytanie danych
     df = pd.read_csv("zbiór_7.csv")
-    X = df.drop("default", axis=1)
+
+    # Zakładamy, że kolumna celu to 'default'
+    X = df.drop(columns=["default"])
     y = df["default"]
-    
-    # Podział train/test/val
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+
+    print("🔍 Rozmiar pełnego zbioru:", X.shape)
+
+    # 2. Podział train / temp / test (60 / 20 / 20) ze stałym random_state
+    X_train, X_temp, y_train, y_temp = train_test_split(
+        X,
+        y,
+        test_size=0.4,
+        stratify=y,
+        random_state=42,
     )
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.25, random_state=42, stratify=y_train
+
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp,
+        y_temp,
+        test_size=0.5,
+        stratify=y_temp,
+        random_state=42,
     )
-    
-    print(f"Train: {X_train.shape}, Test: {X_test.shape}, Val: {X_val.shape}")
-    
-    # Tworzenie pipeline
-    preprocessing_pipeline = create_preprocessing_pipeline(
+
+    print("📚 Train:", X_train.shape, "Val:", X_val.shape, "Test:", X_test.shape)
+
+    # 3. Tworzymy oba pipeline’y
+    tree_pipeline = create_tree_preprocessing_pipeline(
         missing_threshold=0.95,
         lower_q=0.02,
         upper_q=0.98,
-        scale_numeric=True,
         var_threshold=0.01,
-        corr_threshold=0.9
+        corr_threshold=0.9,
     )
-    
-    # Fit na train (zapisuje wszystkie parametry)
-    print("\n🔧 Fitowanie pipeline na zbiorze treningowym...")
-    X_train_transformed = preprocessing_pipeline.fit_transform(X_train)
-    
-    import joblib
-    joblib.dump(preprocessing_pipeline, 'preprocessing_pipeline.pkl')
-    print("\n💾 Pipeline zapisany do pliku 'preprocessing_pipeline.pkl'")
+
+    logit_pipeline = create_logit_preprocessing_pipeline(
+        missing_threshold=0.95,
+        lower_q=0.02,
+        upper_q=0.98,
+        var_threshold=0.01,
+        corr_threshold=0.9,
+        n_bins=5,
+    )
+
+    # 4. Fitujemy pipeline’y na zbiorze treningowym
+    print("\n🌳 Fitowanie pipeline’u dla drzewa na zbiorze treningowym...")
+    X_train_tree = tree_pipeline.fit_transform(X_train, y_train)
+    print("   ➜ Kształt po przetworzeniu (drzewo):", X_train_tree.shape)
+
+    print("\n📈 Fitowanie pipeline’u dla logitu (WoE) na zbiorze treningowym...")
+    X_train_logit = logit_pipeline.fit_transform(X_train, y_train)
+    print("   ➜ Kształt po przetworzeniu (logit+WoE):", X_train_logit.shape)
+
+    # 5. Zapisujemy pipeline’y do plików
+    joblib.dump(tree_pipeline, "preprocessing_tree.pkl")
+    joblib.dump(logit_pipeline, "preprocessing_logit_woe.pkl")
+
+    print("\n💾 Zapisano pipeline’y:")
+    print("   - preprocessing_tree.pkl")
+    print("   - preprocessing_logit_woe.pkl")
