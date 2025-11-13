@@ -6,6 +6,8 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
 
+
+
 class InfinityReplacer(BaseEstimator, TransformerMixin):
     """Zamienia inf/-inf na NaN."""
     

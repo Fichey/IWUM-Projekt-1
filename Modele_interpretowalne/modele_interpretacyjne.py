@@ -1,6 +1,21 @@
+import os
 import pandas as pd
 import numpy as np
 import joblib
+# reszta importów sklearn, warnings, itd.
+
+# ───────────── KONFIGURACJA ŚCIEŻEK ─────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))        # .../IWUM-Projekt-1/Modele_interpretowalne
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..")) # .../IWUM-Projekt-1
+
+DATA_PATH = os.path.join(PROJECT_ROOT, "zbiór_7.csv")
+PREPROC_DIR = os.path.join(PROJECT_ROOT, "EDA", "preprocesing_pipelines")
+
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+RESULTS_DIR = os.path.join(BASE_DIR, "model_results")
+
+os.makedirs(MODELS_DIR, exist_ok=True)
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.linear_model import LogisticRegression
@@ -159,7 +174,7 @@ def train_with_gridsearch(
 
 def main():
     print("📂 Wczytywanie danych...")
-    df = pd.read_csv("zbiór_7.csv")
+    df = pd.read_csv(DATA_PATH)
 
     X = df.drop(columns=["default"])
     y = df["default"]
@@ -175,8 +190,8 @@ def main():
     print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
     print("\n🔄 Ładowanie pipeline’ów...")
-    tree_preproc = joblib.load("preprocessing_tree.pkl")
-    logit_preproc = joblib.load("preprocessing_logit_woe.pkl")
+    tree_preproc = joblib.load(os.path.join(PREPROC_DIR, "preprocessing_tree.pkl"))
+    logit_preproc = joblib.load(os.path.join(PREPROC_DIR, "preprocessing_logit_woe.pkl"))
 
     print("\n🌳 Transformacja danych dla drzewa...")
     X_train_tree = tree_preproc.transform(X_train)
@@ -224,16 +239,21 @@ def main():
     # ============================
     print("\n💾 Zapisujemy modele...")
 
-    joblib.dump(best_logit, "best_logistic_regression_woe.pkl")
-    joblib.dump(best_tree, "best_decision_tree.pkl")
-
-    df_results.to_csv("model_evaluation_results.csv", index=False)
-
+    joblib.dump(best_logit, os.path.join(MODELS_DIR, "best_logistic_regression_woe.pkl"))
+    joblib.dump(best_tree, os.path.join(MODELS_DIR, "best_decision_tree.pkl"))
+    
+    df_results.to_csv(
+        os.path.join(RESULTS_DIR, "model_evaluation_results.csv"),
+        index=False,
+    )
+    
     pd.DataFrame(gs_logit.cv_results_).to_csv(
-        "grid_results_logit_woe.csv", index=False
+        os.path.join(RESULTS_DIR, "grid_results_logit_woe.csv"),
+        index=False,
     )
     pd.DataFrame(gs_tree.cv_results_).to_csv(
-        "grid_results_tree.csv", index=False
+        os.path.join(RESULTS_DIR, "grid_results_tree.csv"),
+        index=False,
     )
 
     print("Zapisano wszystkie modele i wyniki.")

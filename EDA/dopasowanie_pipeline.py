@@ -1,5 +1,21 @@
+import os
+import sys
 import pandas as pd
 import numpy as np
+import joblib
+# ...reszta importów (sklearn, transformers itd.)
+
+# ───────────── KONFIGURACJA ŚCIEŻEK ─────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))        # .../IWUM-Projekt-1/EDA
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..")) # .../IWUM-Projekt-1
+
+# żeby import transformers.py z tego folderu zawsze działał
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
+DATA_PATH = os.path.join(PROJECT_ROOT, "zbiór_7.csv")
+PREPROC_DIR = os.path.join(BASE_DIR, "preprocesing_pipelines")  # dokładnie tak, jak folder się nazywa u Ciebie
+os.makedirs(PREPROC_DIR, exist_ok=True)
 
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -97,7 +113,7 @@ def create_logit_preprocessing_pipeline(
 
 if __name__ == "__main__":
     # 1. Wczytanie danych
-    df = pd.read_csv("zbiór_7.csv")
+    df = pd.read_csv(DATA_PATH)
 
     # Zakładamy, że kolumna celu to 'default'
     X = df.drop(columns=["default"])
@@ -152,8 +168,8 @@ if __name__ == "__main__":
     print("   ➜ Kształt po przetworzeniu (logit+WoE):", X_train_logit.shape)
 
     # 5. Zapisujemy pipeline’y do plików
-    joblib.dump(tree_pipeline, "preprocessing_tree.pkl")
-    joblib.dump(logit_pipeline, "preprocessing_logit_woe.pkl")
+    joblib.dump(tree_pipeline, os.path.join(PREPROC_DIR, "preprocessing_tree.pkl"))
+    joblib.dump(logit_pipeline, os.path.join(PREPROC_DIR, "preprocessing_logit_woe.pkl"))
 
     print("\n💾 Zapisano pipeline’y:")
     print("   - preprocessing_tree.pkl")
