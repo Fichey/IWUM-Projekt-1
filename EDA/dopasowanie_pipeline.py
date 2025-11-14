@@ -17,10 +17,18 @@ DATA_PATH = os.path.join(PROJECT_ROOT, "zbiór_7.csv")
 PREPROC_DIR = os.path.join(BASE_DIR, "preprocesing_pipelines")  # dokładnie tak, jak folder się nazywa u Ciebie
 os.makedirs(PREPROC_DIR, exist_ok=True)
 
+INTERP_LOGIT_DIR = os.path.join(
+    PROJECT_ROOT,
+    "Modele_interpretowalne",
+    "interpretowalnosc_logit",
+)
+FEATURES_TO_DROP_PATH = os.path.join(INTERP_LOGIT_DIR, "logit_features_to_drop.csv")
+
+
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
-from transformers import (
+from eda_transformers import (
     InfinityReplacer,
     HighMissingDropper,
     MissingIndicator,
@@ -30,7 +38,9 @@ from transformers import (
     HighCorrelationDropper,
     OneHotEncoder,
     NumericScaler,   # może się jeszcze przydać, na razie nie używamy
-    WoETransformer   # NOWY transformer, musi być dodany w transformers.py
+    WoETransformer,   # NOWY transformer, musi być dodany w transformers.py
+    WoEDirectionalityFilter,  # potrzebny zeby logit byl interpretowalny
+    DropColumnsTransformer
 )
 
 import joblib
@@ -102,8 +112,10 @@ def create_logit_preprocessing_pipeline(
         ("imputer", CustomImputer()),
         ("winsorizer", Winsorizer(lower_q=lower_q, upper_q=upper_q)),
         ("drop_low_variance", LowVarianceDropper(var_threshold=var_threshold)),
-        ("woe", WoETransformer(n_bins=n_bins)),
         ("drop_high_corr", HighCorrelationDropper(corr_threshold=corr_threshold)),
+        ("woe", WoETransformer(n_bins=n_bins)),
+        ("woe_directionality", WoEDirectionalityFilter(min_corr=-0.01, method="spearman")),
+        ("drop_bad_for_logit", DropColumnsTransformer(columns_path=FEATURES_TO_DROP_PATH)),
     ]
 
     return Pipeline(steps)

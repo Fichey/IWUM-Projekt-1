@@ -338,6 +338,135 @@ class WoETransformer(BaseEstimator, TransformerMixin):
         return X
 
 
+# Dodajemy to bo na pocatku logit wyszedl nie interpretowalny bo duzo wspolczynnikow
+# beta bylo dodatnie 
+
+class WoEDirectionalityFilter(BaseEstimator, TransformerMixin):
+    """
+    Dla cech po WoE:
+    - liczy korelację (domyślnie Spearmana) z targetem
+    - zostawia tylko te kolumny, dla których korelacja jest wyraźnie ujemna.
+      (czyli: większe WoE => mniej defaultów)
+    """
+
+    def __init__(self, min_corr=-0.01, method="spearman", verbose=True):
+        """
+        min_corr : float
+            próg ujemnej korelacji – zostawiamy tylko kolumny z corr < min_corr
+            np. -0.01 znaczy: zachowaj, jeśli korelacja <= -0.01
+        method : {"spearman", "pearson"}
+        verbose : bool
+        """
+        self.min_corr = min_corr
+        self.method = method
+        self.verbose = verbose
+
+    def fit(self, X, y):
+        # zadbajmy o DataFrame z nazwami kolumn
+        if isinstance(X, pd.DataFrame):
+            X_df = X.copy()
+        else:
+            X_df = pd.DataFrame(X, columns=[f"x_{i}" for i in range(X.shape[1])])
+
+        y_series = pd.Series(y)
+
+        self.corrs_ = {}
+        for col in X_df.columns:
+            try:
+                c = X_df[col].corr(y_series, method=self.method)
+            except Exception:
+                c = np.nan
+            self.corrs_[col] = c
+
+        # zostawiamy kolumny z wyraźnie ujemną korelacją
+        self.cols_to_keep_ = [
+            col for col, c in self.corrs_.items()
+            if pd.notna(c) and c < self.min_corr
+        ]
+
+        if self.verbose:
+            total = X_df.shape[1]
+            kept = len(self.cols_to_keep_)
+            dropped = total - kept
+            print(
+                f"🧹 WoEDirectionalityFilter: zachowano {kept}/{total} kolumn, "
+                f"usunięto {dropped} (corr >= {self.min_corr:.3f})"
+            )
+
+        return self
+
+    def transform(self, X):
+        if isinstance(X, pd.DataFrame):
+            X_df = X
+        else:
+            # jeśli X jest macierzą – zakładamy tę samą kolejność kolumn co w fit
+            X_df = pd.DataFrame(X, columns=list(self.corrs_.keys()))
+
+        return X_df[self.cols_to_keep_]
+
+
+class DropColumnsTransformer(BaseEstimator, TransformerMixin):
+    """
+    Transformer usuwający wskazane kolumny.
+
+    Można:
+    - przekazać listę kolumn w parametrze `columns`
+    - albo ścieżkę do pliku CSV z listą cech (`columns_path`),
+      gdzie kolumna z nazwami cech nazywa się np. 'feature'.
+
+    Używamy go przed WoE, żeby wyrzucić cechy z dodatnimi beta / wysokim VIF.
+    """
+
+    def __init__(self, columns=None, columns_path=None, feature_col="feature"):
+        self.columns = columns
+        self.columns_path = columns_path
+        self.feature_col = feature_col
+        self.columns_ = None
+
+    def fit(self, X, y=None):
+        # Jeśli kolumny podane "na sztywno"
+        if self.columns is not None:
+            self.columns_ = list(self.columns)
+            return self
+
+        # Jeśli mamy ścieżkę do CSV z listą cech
+        if self.columns_path is not None:
+            try:
+                df_cols = pd.read_csv(self.columns_path)
+                if self.feature_col not in df_cols.columns:
+                    raise ValueError(
+                        f"Plik {self.columns_path} nie zawiera kolumny '{self.feature_col}' "
+                        "z nazwami cech."
+                    )
+                self.columns_ = df_cols[self.feature_col].astype(str).tolist()
+                if len(self.columns_) > 0:
+                    print(
+                        f"🧹 DropColumnsTransformer: zapamiętano {len(self.columns_)} kolumn "
+                        f"do usunięcia z pliku {self.columns_path}"
+                    )
+                else:
+                    print(
+                        f"🧹 DropColumnsTransformer: plik {self.columns_path} jest pusty – "
+                        "nie usuwamy żadnych kolumn."
+                    )
+            except FileNotFoundError:
+                print(
+                    f"⚠️ DropColumnsTransformer: nie znaleziono pliku {self.columns_path}. "
+                    "Nie usuwamy żadnych kolumn."
+                )
+                self.columns_ = []
+        else:
+            # Nic nie podano – transformer jest no-op
+            self.columns_ = []
+
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        if not self.columns_:
+            return X
+        return X.drop(columns=self.columns_, errors="ignore")
+
 
 
 
