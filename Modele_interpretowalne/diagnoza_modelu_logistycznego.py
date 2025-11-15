@@ -7,6 +7,22 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 
+
+# ============================================================
+#  UWAGA  ⚠️  STARY SKRYPT DIAGNOSTYCZNY – NIE URUCHAMIAĆ
+#
+#  Ten plik był używany TYLKO do analizy poprzedniej wersji
+#  modelu logistycznego, która miała 32 dodatnie współczynniki
+#  beta i została uznana za NIEINTERPRETOWALNĄ.
+#
+#  Aktualny, docelowy model logit (z filtrem WoE kierunku)
+#  jest trenowany i analizowany w:
+#      - modele_interpretacyjne.py
+#      - interpretowalnosc_regresja_logistyczna.py
+#
+#  Tego skryptu nie używamy w finalnym projekcie.
+# ============================================================
+
 # ============================================================
 #                KONFIGURACJA ŚCIEŻEK
 # ============================================================
