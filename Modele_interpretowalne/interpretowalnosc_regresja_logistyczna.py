@@ -22,7 +22,7 @@ PREPROC_DIR = os.path.join(PROJECT_ROOT, "EDA", "preprocesing_pipelines")
 PREPROC_LOGIT_PATH = os.path.join(PREPROC_DIR, "preprocessing_logit_woe.pkl")
 
 # podfoldery na wykresy
-WYKRESY_DIR = os.path.join(INTERP_DIR, "wykresy_interpretowalnosc")
+WYKRESY_DIR = os.path.join(INTERP_DIR, "waznosc_cech")
 PDP_DIR = os.path.join(INTERP_DIR, "PDP")
 ICE_DIR = os.path.join(INTERP_DIR, "ICE")
 
@@ -31,9 +31,8 @@ os.makedirs(WYKRESY_DIR, exist_ok=True)
 os.makedirs(PDP_DIR, exist_ok=True)
 os.makedirs(ICE_DIR, exist_ok=True)
 
-DATA_PATH = os.path.join(PROJECT_ROOT, "zbiór_7.csv")
-PREPROC_DIR = os.path.join(PROJECT_ROOT, "EDA", "preprocesing_pipelines")
-
+INTERP_LOCAL_DIR = os.path.join(INTERP_DIR, "interpretowalnosc_lokalna")
+os.makedirs(INTERP_LOCAL_DIR, exist_ok=True)
 
 # ============================================================
 #                ANALIZA WSPÓŁCZYNNIKÓW LOGITU
@@ -491,6 +490,198 @@ def generate_pdp_ice_for_top_features(df_coef, X_woe, y, logit, top_n=5):
         plot_ice(grid, ice_curves, feat)
 
 
+
+# ============================================================
+#             LOKALNA INTERPRETACJA – 9 PRZYPADKÓW
+# ============================================================
+
+INTERP_LOCAL_DIR = os.path.join(INTERP_DIR, "interpretowalnosc_lokalna")
+os.makedirs(INTERP_LOCAL_DIR, exist_ok=True)
+
+LOGIT_PREPROC_PATH = os.path.join(PREPROC_DIR, "preprocessing_logit_woe.pkl")
+
+
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def load_logit_preproc():
+    """
+    Ładuje pipeline preprocessingowy dla logitu (WoE).
+    """
+    if not os.path.exists(LOGIT_PREPROC_PATH):
+        raise FileNotFoundError(f"Nie znaleziono pipeline'u logitu pod: {LOGIT_PREPROC_PATH}")
+    return joblib.load(LOGIT_PREPROC_PATH)
+
+
+def get_data_splits_for_local():
+    """
+    Odwzorowuje podział 60/20/20 używany w projekcie.
+    Zwraca: X_train, X_val, X_test, y_train, y_val, y_test
+    """
+    df = pd.read_csv(DATA_PATH)
+    X = df.drop(columns=["default"])
+    y = df["default"]
+
+    X_train, X_temp, y_train, y_temp = train_test_split(
+        X, y, test_size=0.4, random_state=42, stratify=y
+    )
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
+    )
+    return X_train, X_val, X_test, y_train, y_val, y_test
+
+
+def transform_to_feature_df(preproc_logit, logit, X):
+    """
+    Przepuszcza X przez preproc_logit i zwraca DataFrame
+    z kolumnami w tej samej kolejności, co feature_names_in_ modelu logit.
+    """
+    X_tr = preproc_logit.transform(X)
+
+    if isinstance(X_tr, pd.DataFrame):
+        # upewniamy się, że kolumny są w tej samej kolejności
+        return X_tr.loc[:, logit.feature_names_in_]
+
+    # jeśli np. jest to ndarray:
+    return pd.DataFrame(X_tr, columns=logit.feature_names_in_)
+
+
+def select_9_cases_evenly_by_pd(X_test_tr, y_test, logit):
+    """
+    Wybiera 9 obserwacji z testu, rozłożonych równomiernie po skali PD.
+    Korzysta z kwantyli przewidzianych PD (0.05, 0.15, ..., 0.95).
+    Zwraca listę indeksów X_test (oryginalnych).
+    """
+    p_test = logit.predict_proba(X_test_tr)[:, 1]
+    s = pd.Series(p_test, index=y_test.index)
+
+    quantiles = np.linspace(0.05, 0.95, 9)
+    selected_idx = []
+
+    for q in quantiles:
+        target = s.quantile(q)
+        # obserwacja, której PD jest najbliżej wybranego kwantyla
+        idx = (s - target).abs().sort_values().index[0]
+        # jeśli już mamy tę obserwację, szukamy kolejnej najbliższej
+        if idx in selected_idx:
+            for alt_idx in (s - target).abs().sort_values().index:
+                if alt_idx not in selected_idx:
+                    idx = alt_idx
+                    break
+        selected_idx.append(idx)
+
+    return selected_idx, s
+
+
+def decompose_logit_for_case(idx, x_row, y_true, beta, intercept, feature_names):
+    """
+    Rozkłada logit dla pojedynczej obserwacji na wkłady cech.
+    Zwraca:
+      - df_contrib: DataFrame z wkładami dla wszystkich cech (do sortowania)
+      - meta: dict z logitem, PD i y_true
+    """
+    x_vals = x_row.values.astype(float)
+    beta_vals = beta.astype(float)
+
+    contrib = x_vals * beta_vals
+    logit_val = intercept + contrib.sum()
+    pd_val = sigmoid(logit_val)
+
+    df_contrib = pd.DataFrame({
+        "feature": feature_names,
+        "x_value": x_vals,
+        "beta": beta_vals,
+        "contribution": contrib,
+    })
+    df_contrib["abs_contribution"] = df_contrib["contribution"].abs()
+
+    # sortujemy od najbardziej wpływowych cech
+    df_contrib = df_contrib.sort_values("abs_contribution", ascending=False).reset_index(drop=True)
+
+    meta = {
+        "index": int(idx),
+        "y_true": int(y_true),
+        "logit": float(logit_val),
+        "pd": float(pd_val),
+    }
+    return df_contrib, meta
+
+
+def compute_local_decomposition_for_9_cases(logit, df_coef):
+    """
+    Główna funkcja:
+      - ładuje preproc i dane,
+      - wybiera 9 case'ów rozłożonych po skali PD,
+      - dla każdego case'a rozkłada logit na wkłady cech,
+      - zapisuje:
+          * local_cases_meta.csv – 9 wierszy (case_id, index, y_true, logit, pd)
+          * local_cases_top10_contributions.csv – top 10 cech dla każdego case'a
+    """
+    print("\n🧩 Liczę lokalną interpretację (9 przypadków)...")
+
+    preproc_logit = load_logit_preproc()
+    X_train, X_val, X_test, y_train, y_val, y_test = get_data_splits_for_local()
+    X_test_tr = transform_to_feature_df(preproc_logit, logit, X_test)
+
+    beta = logit.coef_.ravel()
+    intercept = float(logit.intercept_[0])
+    feature_names = np.array(logit.feature_names_in_)
+
+    # wybieramy 9 przypadków
+    selected_idx, pd_series = select_9_cases_evenly_by_pd(X_test_tr, y_test, logit)
+    print(f"   Wybrane indeksy testu: {selected_idx}")
+
+    meta_rows = []
+    all_top10_rows = []
+
+    for case_id, idx in enumerate(selected_idx, start=1):
+        x_row = X_test_tr.loc[idx, :]
+        y_true = y_test.loc[idx]
+
+        df_contrib, meta = decompose_logit_for_case(
+            idx=idx,
+            x_row=x_row,
+            y_true=y_true,
+            beta=beta,
+            intercept=intercept,
+            feature_names=feature_names,
+        )
+
+        # łączymy z globalnymi informacjami o współczynnikach (np. abs_beta, sign)
+        df_contrib = df_contrib.merge(
+            df_coef[["feature", "abs_beta", "sign"]],
+            how="left",
+            on="feature",
+        )
+
+        # bierzemy top 10 cech
+        df_top10 = df_contrib.head(10).copy()
+        df_top10["case_id"] = case_id
+        df_top10["original_index"] = int(idx)
+        df_top10["rank"] = np.arange(1, len(df_top10) + 1)
+
+        all_top10_rows.append(df_top10)
+
+        meta["case_id"] = case_id
+        meta["original_index"] = int(idx)
+        meta_rows.append(meta)
+
+    # zapis meta
+    df_meta = pd.DataFrame(meta_rows)[
+        ["case_id", "original_index", "y_true", "logit", "pd"]
+    ]
+    meta_path = os.path.join(INTERP_LOCAL_DIR, "local_cases_meta.csv")
+    df_meta.to_csv(meta_path, index=False)
+    print(f"💾 Zapisano podsumowanie 9 przypadków → {meta_path}")
+
+    # zapis top10 contributions (long format)
+    df_all_top10 = pd.concat(all_top10_rows, ignore_index=True)
+    contrib_path = os.path.join(INTERP_LOCAL_DIR, "local_cases_top10_contributions.csv")
+    df_all_top10.to_csv(contrib_path, index=False)
+    print(f"💾 Zapisano top 10 wkładów cech dla 9 przypadków → {contrib_path}")
+
+
 # ============================================================
 #                           MAIN
 # ============================================================
@@ -528,6 +719,9 @@ def main():
     print("\n✅ Zakończono generowanie wykresów interpretowalności logitu.")
     
     diagnose_bin_sizes(df_coef, n_top=5, min_count=50)
+    
+    # Lokalna interpretacja – 5 obserwacji
+    compute_local_decomposition_for_9_cases(logit, df_coef)
 
 if __name__ == "__main__":
     main()
