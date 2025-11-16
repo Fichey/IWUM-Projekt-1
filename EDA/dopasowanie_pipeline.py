@@ -121,6 +121,41 @@ def create_logit_preprocessing_pipeline(
     return Pipeline(steps)
 
 
+# ========= PIPELINE DLA MODELI NIEINTERPRETOWALNYCH (XGBoost, LightGBM, MLP) =========
+
+def create_blackbox_preprocessing_pipeline(
+    missing_threshold: float = 0.95,
+    lower_q: float = 0.02,
+    upper_q: float = 0.98,
+    var_threshold: float = 0.01,
+    corr_threshold: float = 0.9,
+) -> Pipeline:
+    """
+    Preprocessing pod modele nieinterpretowalne (XGBoost, LightGBM, MLP):
+    - OneHotEncoder dla zmiennych kategorycznych
+    - zamiana inf na NaN
+    - wyrzucenie kolumn z ogromną liczbą braków
+    - dodanie wskaźników braków
+    - imputacja (median / most_frequent)
+    - winsoryzacja (obcięcie outlierów)
+    - wyrzucenie kolumn o bardzo małej wariancji
+    - wyrzucenie kolumn mocno skorelowanych
+    - NumericScaler (standaryzacja dla MLP - dla drzew nie szkodzi)
+    """
+    steps = [
+        ("one_hot", OneHotEncoder()),
+        ("inf_replacer", InfinityReplacer()),
+        ("drop_high_missing", HighMissingDropper(missing_threshold=missing_threshold)),
+        ("missing_indicator", MissingIndicator()),
+        ("imputer", CustomImputer()),
+        ("winsorizer", Winsorizer(lower_q=lower_q, upper_q=upper_q)),
+        ("drop_low_variance", LowVarianceDropper(var_threshold=var_threshold)),
+        ("drop_high_corr", HighCorrelationDropper(corr_threshold=corr_threshold)),
+        ("scaler", NumericScaler()),  # Dodajemy skalowanie dla MLP
+    ]
+
+    return Pipeline(steps)
+
 # ========= GŁÓWNY BLOK: PODZIAŁ DANYCH + FITOWANIE PIPELINE’ÓW =========
 
 if __name__ == "__main__":
@@ -169,6 +204,14 @@ if __name__ == "__main__":
         corr_threshold=0.9,
         n_bins=5,
     )
+        # Pipeline dla modeli nieinterpretowalnych
+    blackbox_pipeline = create_blackbox_preprocessing_pipeline(
+        missing_threshold=0.95,
+        lower_q=0.02,
+        upper_q=0.98,
+        var_threshold=0.01,
+        corr_threshold=0.9,
+    )
 
     # 4. Fitujemy pipeline’y na zbiorze treningowym
     print("\n🌳 Fitowanie pipeline’u dla drzewa na zbiorze treningowym...")
@@ -178,11 +221,18 @@ if __name__ == "__main__":
     print("\n📈 Fitowanie pipeline’u dla logitu (WoE) na zbiorze treningowym...")
     X_train_logit = logit_pipeline.fit_transform(X_train, y_train)
     print("   ➜ Kształt po przetworzeniu (logit+WoE):", X_train_logit.shape)
+    
+    print("\n🤖 Fitowanie pipeline'u dla modeli nieinterpretowalnych na zbiorze treningowym...")
+    X_train_blackbox = blackbox_pipeline.fit_transform(X_train, y_train)
+    print("   ➜ Kształt po przetworzeniu (blackbox):", X_train_blackbox.shape)
+
 
     # 5. Zapisujemy pipeline’y do plików
     joblib.dump(tree_pipeline, os.path.join(PREPROC_DIR, "preprocessing_tree.pkl"))
     joblib.dump(logit_pipeline, os.path.join(PREPROC_DIR, "preprocessing_logit_woe.pkl"))
+    joblib.dump(blackbox_pipeline, os.path.join(PREPROC_DIR, "preprocessing_blackbox.pkl"))
 
-    print("\n💾 Zapisano pipeline’y:")
+    print("\n💾 Zapisano pipeline'y:")
     print("   - preprocessing_tree.pkl")
     print("   - preprocessing_logit_woe.pkl")
+    print("   - preprocessing_blackbox.pkl")
