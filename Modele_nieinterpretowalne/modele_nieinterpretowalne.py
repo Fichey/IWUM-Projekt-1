@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import joblib
 import warnings
+import re
+import ast
 warnings.filterwarnings("ignore")
 
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
@@ -152,54 +154,112 @@ def train_with_randomized_search(model, param_distributions, X_train, y_train, m
     print(f"Overfitting gap: {train_score - val_score:.4f}")
     return rs.best_estimator_, rs
 
+import re
+import matplotlib.pyplot as plt
+
 def generate_shap_explanations(model, X_train, X_test, feature_names, model_name):
     print(f"\nGenerowanie wyjasnien SHAP dla {model_name}...")
+
+    # Poprawka base_score dla XGBoost, jeśli potrzebna (jeśli używasz XGBoost)
+    if hasattr(model, "get_booster"):
+        booster = model.get_booster()
+        base_score = booster.attr("base_score")
+        if base_score is not None:
+            if isinstance(base_score, str):
+                try:
+                    base_score = ast.literal_eval(base_score)
+                except Exception:
+                    pass
+            if isinstance(base_score, (list, tuple, np.ndarray)):
+                base_score = base_score[0]
+            base_score = float(base_score)
+            booster.set_param("base_score", base_score)
+
+    import shap
+    import matplotlib.pyplot as plt
+
     if hasattr(model, "get_booster") or hasattr(model, "booster_"):
         explainer = shap.TreeExplainer(model)
     else:
         background = shap.sample(X_train, 100)
         explainer = shap.KernelExplainer(model.predict_proba, background)
+
     shap_values = explainer.shap_values(X_test[:500])
+
+    # Obsługa różnych formatów shap_values (lista po klasach lub ndarray 3D)
     if isinstance(shap_values, list):
-        shap_values = shap_values[1]
+        shap_values_class = shap_values[1]  # wybierz SHAP dla klasy pozytywnej (indeks 1)
+    elif len(shap_values.shape) == 3:
+        shap_values_class = shap_values[..., 1]  # wybierz SHAP dla klasy pozytywnej
+    else:
+        shap_values_class = shap_values
+
+    mean_abs_shap = np.abs(shap_values_class).mean(axis=0)
+    top_features_idx = np.argsort(mean_abs_shap)[-3:][::-1]
+
+    # wykres podsumowujący (bar)
     plt.figure(figsize=(10, 6))
-    shap.summary_plot(shap_values, X_test[:500], feature_names=feature_names, plot_type="bar", show=False)
+    shap.summary_plot(shap_values_class, X_test[:500], feature_names=feature_names, plot_type="bar", show=False)
     plt.tight_layout()
     plt.savefig(os.path.join(SHAP_DIR, f"{model_name}_summary_bar.png"), dpi=150)
     plt.close()
+
+    # wykres typu beeswarm
     plt.figure(figsize=(10, 8))
-    shap.summary_plot(shap_values, X_test[:500], feature_names=feature_names, show=False)
+    shap.summary_plot(shap_values_class, X_test[:500], feature_names=feature_names, show=False)
     plt.tight_layout()
     plt.savefig(os.path.join(SHAP_DIR, f"{model_name}_beeswarm.png"), dpi=150)
     plt.close()
-    mean_abs_shap = np.abs(shap_values).mean(axis=0)
-    top_features_idx = np.argsort(mean_abs_shap)[-3:][::-1]
+
+    # wykresy zależności dla 3 najważniejszych cech
     for idx in top_features_idx:
-        plt.figure(figsize=(8, 6))
-        shap.dependence_plot(idx, shap_values, X_test[:500], feature_names=feature_names, show=False)
+        shap.dependence_plot(idx, shap_values_class, X_test[:500], feature_names=feature_names, interaction_index=None, show=False)
         plt.tight_layout()
         plt.savefig(os.path.join(SHAP_DIR, f"{model_name}_dependence_{feature_names[idx]}.png"), dpi=150)
         plt.close()
+
     print(f"Wykresy SHAP zapisane w {SHAP_DIR}")
-    return explainer, shap_values
+
+    return explainer, shap_values_class
+
 
 def generate_lime_explanations(model, X_train, X_test, y_test, feature_names, model_name, n_instances=5):
     print(f"\nGenerowanie wyjasnien LIME dla {model_name}...")
+    
+    # Upewnij się, że dane to dense numpy array
+    if hasattr(X_train, "toarray"):
+        X_train = X_train.toarray()
+    if hasattr(X_test, "toarray"):
+        X_test = X_test.toarray()
+        
+    if hasattr(X_train, "values"):
+        X_train = X_train.values
+    if hasattr(X_test, "values"):
+        X_test = X_test.values
+        
+    # Upewnij się, że feature_names to lista
+    feature_names = list(feature_names)
+
     explainer = lime.lime_tabular.LimeTabularExplainer(
-        X_train,
+        training_data=X_train,
         feature_names=feature_names,
         class_names=["No Default", "Default"],
         mode="classification",
         random_state=42,
+        discretize_continuous=True
     )
+
     y_pred = model.predict(X_test)
     y_pred_proba = model.predict_proba(X_test)[:, 1]
+
     tp_idx = np.where((y_test == 1) & (y_pred == 1))[0]
     tn_idx = np.where((y_test == 0) & (y_pred == 0))[0]
     fp_idx = np.where((y_test == 0) & (y_pred == 1))[0]
     fn_idx = np.where((y_test == 1) & (y_pred == 0))[0]
+
     instances = []
     labels = []
+
     if len(tp_idx) > 0:
         instances.append(tp_idx[0])
         labels.append("True_Positive")
@@ -212,14 +272,20 @@ def generate_lime_explanations(model, X_train, X_test, y_test, feature_names, mo
     if len(fn_idx) > 0:
         instances.append(fn_idx[0])
         labels.append("False_Negative")
+
     lime_explanations = []
+
     for i, (idx, label) in enumerate(zip(instances, labels)):
+        # explain_instance wymaga pojedynczej instancji jako 1D array
         exp = explainer.explain_instance(X_test[idx], model.predict_proba, num_features=10)
+        
         exp.save_to_file(os.path.join(LIME_DIR, f"{model_name}_{label}_instance_{idx}.html"))
+        
         fig = exp.as_pyplot_figure()
         fig.tight_layout()
         plt.savefig(os.path.join(LIME_DIR, f"{model_name}_{label}_instance_{idx}.png"), dpi=150, bbox_inches="tight")
         plt.close()
+
         lime_explanations.append({
             "instance_idx": idx,
             "label": label,
@@ -228,9 +294,11 @@ def generate_lime_explanations(model, X_train, X_test, y_test, feature_names, mo
             "predicted_proba": y_pred_proba[idx],
             "explanation": exp.as_list(),
         })
+
     lime_df = pd.DataFrame(lime_explanations)
     lime_df.to_csv(os.path.join(LIME_DIR, f"{model_name}_lime_explanations.csv"), index=False)
     print(f"Wyjasnienia LIME zapisane w {LIME_DIR}")
+
     return lime_explanations
 
 def main():
