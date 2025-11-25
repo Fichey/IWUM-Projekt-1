@@ -37089,25 +37089,25 @@
 /***/ })
 /******/ ]);
 //# sourceMappingURL=bundle.js.map </script></head><body>
-        <div class="lime top_div" id="top_div6IPYNJGFFM7VPBT"></div>
+        <div class="lime top_div" id="top_div1Q05TNK1MRFRCQD"></div>
         
         <script>
-        var top_div = d3.select('#top_div6IPYNJGFFM7VPBT').classed('lime top_div', true);
+        var top_div = d3.select('#top_div1Q05TNK1MRFRCQD').classed('lime top_div', true);
         
             var pp_div = top_div.append('div')
                                 .classed('lime predict_proba', true);
             var pp_svg = pp_div.append('svg').style('width', '100%');
-            var pp = new lime.PredictProba(pp_svg, ["No Default", "Default"], [0.7041521072387695, 0.2958478629589081]);
+            var pp = new lime.PredictProba(pp_svg, ["No Default", "Default"], [0.4631029141303433, 0.5368970858696567]);
             
         
         var exp_div;
             var exp = new lime.Explanation(["No Default", "Default"]);
         
                 exp_div = top_div.append('div').classed('lime explanation', true);
-                exp.show([["Kapital_wlasny <= -0.41", 0.035637088212792004], ["formaWlasnosci_Symbol <= 0.24", -0.013756314392530654], ["wsk_kapital_do_aktywa_missing <= 0.00", -0.01297077083318017], ["wsk_poziom_kapitalu_obrotowego_netto <= -0.49", 0.011055656041137769], ["wsk_zadluzenie_kap_wlasnego <= -0.39", -0.00856668685750806], ["wsk_rent_operacyjna <= 0.18", 0.008301365866009476], ["wsk_rotacja_rz_aktywow_trwalych <= -0.38", -0.006846627025314603], ["Aktywa_obrotowe <= -0.54", 0.006726704625662256], ["wsk_marza_ebitda_3 <= 0.05", 0.006099888944804916], ["wsk_ebitda_zobowiazan_1 <= -0.21", 0.006069834870514476]], 1, exp_div);
+                exp.show([["Kapital_wlasny <= -0.41", 0.027667590549771737], ["wsk_zadluzenie_kap_wlasnego > -0.14", 0.012818432671320197], ["-0.37 < pozostale_przychody_oper <= -0.36", 0.0111028250287341], ["wsk_efekt_dzwigni_fin_1 > -0.12", 0.008783190206341072], ["wsk_kapital_do_aktywa <= -0.81", 0.00863241936687393], ["wsk_mnoznik_kap_wl > -0.18", 0.008457584304104678], ["wsk_marza_brutto_2 <= 0.06", 0.008436700969221684], ["wsk_pokrycia_odsetek_zyskiem <= -0.23", -0.007578129181114558], ["wsk_zysk_zobowiazania <= -0.14", 0.007408353964821411], ["0.24 < formaWlasnosci_Symbol <= 0.26", 0.00643635658918172]], 1, exp_div);
                 
         var raw_div = top_div.append('div');
-            exp.show_raw_tabular([["Kapital_wlasny", "-0.42", 0.035637088212792004], ["formaWlasnosci_Symbol", "0.24", -0.013756314392530654], ["wsk_kapital_do_aktywa_missing", "0.00", -0.01297077083318017], ["wsk_poziom_kapitalu_obrotowego_netto", "-0.50", 0.011055656041137769], ["wsk_zadluzenie_kap_wlasnego", "-0.41", -0.00856668685750806], ["wsk_rent_operacyjna", "0.03", 0.008301365866009476], ["wsk_rotacja_rz_aktywow_trwalych", "-0.38", -0.006846627025314603], ["Aktywa_obrotowe", "-0.56", 0.006726704625662256], ["wsk_marza_ebitda_3", "-0.09", 0.006099888944804916], ["wsk_ebitda_zobowiazan_1", "-1.10", 0.006069834870514476]], 1, raw_div);
+            exp.show_raw_tabular([["Kapital_wlasny", "-0.42", 0.027667590549771737], ["wsk_zadluzenie_kap_wlasnego", "5.29", 0.012818432671320197], ["pozostale_przychody_oper", "-0.36", 0.0111028250287341], ["wsk_efekt_dzwigni_fin_1", "5.98", 0.008783190206341072], ["wsk_kapital_do_aktywa", "-1.87", 0.00863241936687393], ["wsk_mnoznik_kap_wl", "5.62", 0.008457584304104678], ["wsk_marza_brutto_2", "0.06", 0.008436700969221684], ["wsk_pokrycia_odsetek_zyskiem", "-0.23", -0.007578129181114558], ["wsk_zysk_zobowiazania", "-0.15", 0.007408353964821411], ["formaWlasnosci_Symbol", "0.26", 0.00643635658918172]], 1, raw_div);
         
         </script>
         </body></html>
