@@ -1,0 +1,33 @@
+===========================================================
+                FINALNY MODEL PD – BETA COEFFICIENTS
+===========================================================
+
+Intercept (β0):  -2.214455
+
++-----------------------------------------------+--------------+
+|                    CECHA                      |     β        |
++-----------------------------------------------+--------------+
+| formaWlasnosci_Symbol                         |   -0.230070  |
+| Zobowiazania_dlugoterminowe                   |   -0.473241  |
+| wsk_ROA                                       |   -0.460826  |
+| wsk_mnoznik_kap_wl                            |   -0.334727  |
+| wsk_koszty_przychody                          |   -0.358749  |
+| wsk_zadluzenia_pozyczki_dlugie                |   -0.189634  |
+| wsk_rotacja_zobowiazan_dostaw_uslug           |   -0.322933  |
+| wsk_poziom_kapitalu_obrotowego_netto          |   -0.666113  |
+| wsk_zob_s_aktywa_rzeczowe                     |   -0.498237  |
++-----------------------------------------------+--------------+
+
+Wszystkie współczynniki β < 0 → model w pełni monotoniczny,
+interpretowalny i zgodny z logiką ryzyka kredytowego.
+===========================================================
+
+======================================================================
+              WYNIKI MODELI (VAL + TEST)
+======================================================================
+  model_name dataset  roc_auc     gini   pr_auc       ks  log_loss    brier
+   Logit_WoE     val 0.686967 0.373934 0.235180 0.349154  0.296528 0.083226
+   Logit_WoE    test 0.743029 0.486059 0.238498 0.391684  0.281667 0.079912
+DecisionTree     val 0.659578 0.319156 0.152672 0.273126  0.750897 0.210079
+DecisionTree    test 0.735760 0.471519 0.217289 0.396821  0.798915 0.206211
+======================================================================
