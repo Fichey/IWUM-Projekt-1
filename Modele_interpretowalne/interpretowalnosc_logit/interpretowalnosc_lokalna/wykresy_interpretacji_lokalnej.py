@@ -47,7 +47,7 @@ def load_local_data():
 def plot_single_case_bar(df_case, meta_row, save_path):
     """
     Rysuje wykres słupkowy wkładów cech do logitu dla pojedynczego case'a.
-    df_case – wiersze dla jednego case_id (top 10 cech),
+    df_case – wiersze dla jednego case_id (top 9 cech),
     meta_row – Series z informacjami: case_id, original_index, y_true, logit, pd
     """
     # sortujemy tak, aby najbardziej wpływowe cechy były na górze
@@ -83,7 +83,7 @@ def plot_single_case_bar(df_case, meta_row, save_path):
 
 def generate_per_case_plots(df_meta, df_contrib):
     """
-    Generuje po jednym wykresie dla każdego z 9 case'ów (top 10 cech).
+    Generuje po jednym wykresie dla każdego z 9 case'ów (top 9 cech).
     """
     for _, meta_row in df_meta.sort_values("case_id").iterrows():
         case_id = int(meta_row["case_id"])
@@ -91,7 +91,7 @@ def generate_per_case_plots(df_meta, df_contrib):
 
         df_case = df_contrib[df_contrib["case_id"] == case_id].copy()
 
-        fname = f"case_{case_id}_idx_{idx}_top10_contributions.png"
+        fname = f"case_{case_id}_idx_{idx}_top9_contributions.png"
         save_path = os.path.join(PLOTS_CASE_DIR, fname)
 
         plot_single_case_bar(df_case, meta_row, save_path)
@@ -102,7 +102,7 @@ def generate_per_case_plots(df_meta, df_contrib):
 #     Zbiorczy wykres 3×3 – 9 case'ów, kolor = gradient po PD
 # ============================================================
 
-def plot_grid_cases(df_meta, df_contrib, n_per_case=10):
+def plot_grid_cases(df_meta, df_contrib, n_per_case=9):
     """
     Tworzy zbiorczy wykres 3x3:
       - każdy subplot to top 10 wkładów dla danego case'a,
@@ -181,7 +181,7 @@ def main():
     generate_per_case_plots(df_meta, df_contrib)
 
     print("🖼️ Rysuję zbiorczy wykres 3x3 z gradientem po PD...")
-    plot_grid_cases(df_meta, df_contrib, n_per_case=10)
+    plot_grid_cases(df_meta, df_contrib, n_per_case=9)
 
     print("✅ Gotowe – lokalna interpretacja zwizualizowana.")
 

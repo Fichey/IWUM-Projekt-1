@@ -25,7 +25,9 @@ PREPROC_LOGIT_PATH = os.path.join(PREPROC_DIR, "preprocessing_logit_woe.pkl")
 WYKRESY_DIR = os.path.join(INTERP_DIR, "waznosc_cech")
 PDP_DIR = os.path.join(INTERP_DIR, "PDP")
 ICE_DIR = os.path.join(INTERP_DIR, "ICE")
+WOE_PROFILS = os.path.join(INTERP_DIR, "woe_profils")
 
+os.makedirs(WOE_PROFILS, exist_ok=True)
 os.makedirs(INTERP_DIR, exist_ok=True)
 os.makedirs(WYKRESY_DIR, exist_ok=True)
 os.makedirs(PDP_DIR, exist_ok=True)
@@ -184,7 +186,7 @@ def plot_woe_profile(X_woe, y, feature, save_path):
 def generate_woe_profiles(df_coef, X_woe, y):
     """Rysuje:
        • profil dla jednej cechy z beta > 0 (jeśli istnieje),
-       • profile dla 5 cech z największym |beta| i znakiem negative.
+       • profile dla 9 cech z największym |beta| i znakiem negative.
     """
     # cecha z dodatnią betą (jeśli jest)
     df_pos = df_coef[df_coef["sign"] == "positive"]
@@ -199,8 +201,8 @@ def generate_woe_profiles(df_coef, X_woe, y):
         print("\nℹ️ Brak cech z dodatnią betą – nie rysuję osobnego profilu dla beta > 0.")
 
     # top-5 cech z ujemną betą wg |beta|
-    df_neg = df_coef[df_coef["sign"] == "negative"].head(5)
-    print("\n📈 Profile WoE dla 5 cech z największym |beta| (beta < 0):")
+    df_neg = df_coef[df_coef["sign"] == "negative"].head(9)
+    print("\n📈 Profile WoE dla 9 cech z największym |beta| (beta < 0):")
     for feat in df_neg["feature"]:
         save_path = os.path.join(INTERP_DIR,"woe_profils", f"woe_profile_top_negative_{feat}.png")
         plot_woe_profile(X_woe, y, feat, save_path)
@@ -345,7 +347,7 @@ def diagnose_bin_sizes(df_coef, n_top=5, min_count=50):
 #                RANKING CECH I CONTRIBUTION PLOT
 # ============================================================
 
-def plot_beta_importance(df_coef, top_n=20):
+def plot_beta_importance(df_coef, top_n=9):
     """Wykres słupkowy top_n cech wg |beta|."""
     df_top = df_coef.head(top_n).iloc[::-1]  # od najmniejszej do największej na osi Y
 
@@ -476,7 +478,7 @@ def plot_ice(grid, ice_curves, feature):
     print(f"   ➜ zapisano ICE: {out_path}")
 
 
-def generate_pdp_ice_for_top_features(df_coef, X_woe, y, logit, top_n=5):
+def generate_pdp_ice_for_top_features(df_coef, X_woe, y, logit, top_n=9):
     """PDP + ICE dla top_n cech wg |beta| (niezależnie od znaku)."""
     df_top = df_coef.head(top_n)
     print(f"\n📈 PDP i ICE dla top {top_n} cech wg |beta|:")
@@ -616,7 +618,7 @@ def compute_local_decomposition_for_9_cases(logit, df_coef):
       - dla każdego case'a rozkłada logit na wkłady cech,
       - zapisuje:
           * local_cases_meta.csv – 9 wierszy (case_id, index, y_true, logit, pd)
-          * local_cases_top10_contributions.csv – top 10 cech dla każdego case'a
+          * local_cases_top10_contributions.csv – top 9 cech dla każdego case'a
     """
     print("\n🧩 Liczę lokalną interpretację (9 przypadków)...")
 
@@ -655,8 +657,8 @@ def compute_local_decomposition_for_9_cases(logit, df_coef):
             on="feature",
         )
 
-        # bierzemy top 10 cech
-        df_top10 = df_contrib.head(10).copy()
+        # bierzemy top 9 cech
+        df_top10 = df_contrib.head(9).copy()
         df_top10["case_id"] = case_id
         df_top10["original_index"] = int(idx)
         df_top10["rank"] = np.arange(1, len(df_top10) + 1)
@@ -679,7 +681,7 @@ def compute_local_decomposition_for_9_cases(logit, df_coef):
     df_all_top10 = pd.concat(all_top10_rows, ignore_index=True)
     contrib_path = os.path.join(INTERP_LOCAL_DIR, "local_cases_top10_contributions.csv")
     df_all_top10.to_csv(contrib_path, index=False)
-    print(f"💾 Zapisano top 10 wkładów cech dla 9 przypadków → {contrib_path}")
+    print(f"💾 Zapisano top 9 wkładów cech dla 9 przypadków → {contrib_path}")
 
 
 # ============================================================
@@ -698,8 +700,8 @@ def main():
     summarize_signs(df_coef, intercept)
     save_coefficients(df_coef)
 
-    print("\nTop 10 cech wg |beta|:")
-    print(df_coef.head(10).to_string(index=False))
+    print("\nTop 9 cech wg |beta|:")
+    print(df_coef.head(9).to_string(index=False))
 
     print("\n📂 Przygotowywanie danych (WoE)...")
     X_woe, y = load_and_prepare_data(preproc_logit, logit)
@@ -708,17 +710,17 @@ def main():
     generate_woe_profiles(df_coef, X_woe, y)
 
     # ---------- Ranking cech ----------
-    plot_beta_importance(df_coef, top_n=20)
+    plot_beta_importance(df_coef, top_n=9)
 
     # ---------- Contribution plot ----------
     plot_contribution_for_top_case(df_coef, intercept, X_woe, y, logit)
 
     # ---------- PDP + ICE ----------
-    generate_pdp_ice_for_top_features(df_coef, X_woe, y, logit, top_n=5)
+    generate_pdp_ice_for_top_features(df_coef, X_woe, y, logit, top_n=9)
 
     print("\n✅ Zakończono generowanie wykresów interpretowalności logitu.")
     
-    diagnose_bin_sizes(df_coef, n_top=5, min_count=50)
+    diagnose_bin_sizes(df_coef, n_top=9, min_count=50)
     
     # Lokalna interpretacja – 5 obserwacji
     compute_local_decomposition_for_9_cases(logit, df_coef)
