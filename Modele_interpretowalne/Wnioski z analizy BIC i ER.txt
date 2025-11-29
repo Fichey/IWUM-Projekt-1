@@ -1,0 +1,29 @@
++-----+--------------+--------------+--------------+--------------+--------------+--------------+------------+------------+--------------+--------------+
+|  k  | ROC AUC (T)  | ROC AUC (V)  | Gini (T)     | Gini (V)     | KS (T)       | KS (V)       | Brier (T)  | Brier (V)  | PR AUC (T)   | PR AUC (V)   |
++-----+--------------+--------------+--------------+--------------+--------------+--------------+------------+------------+--------------+--------------+
+|  3  |   0.7156     |   0.6911     |   0.4312     |   0.3822     |   0.3278     |   0.3411     |   0.0816   |   0.0833   |   0.2121     |   0.2226     |
+|  5  |   0.7196     |   0.6746     |   0.4393     |   0.3492     |   0.3230     |   0.2740     |   0.0813   |   0.0837   |   0.2197     |   0.2292     |
+|  8  |   0.7307     |   0.6588     |   0.4613     |   0.3175     |   0.3419     |   0.3135     |   0.0803   |   0.0846   |   0.2439     |   0.2279     |
+| 10  |   0.7506     |   0.6786     |   0.5012     |   0.3572     |   0.3844     |   0.3331     |   0.0798   |   0.0843   |   0.2380     |   0.2140     |
++-----+--------------+--------------+--------------+--------------+--------------+--------------+------------+------------+--------------+--------------+
+Legenda:
+T = Train, V = Validation
+
+Niniejsza analiza porównuje modele logistyczne z różną liczbą zmiennych (k ∈ {3, 5, 8, 10}).
+Wszystkie modele zostały dopasowane klasyczną regresją logistyczną (statsmodels.Logit),
+bez regularyzacji, na danych po transformacji WOE, przy użyciu tych samych danych
+treningowych i walidacyjnych. 
+
+Decyzję o wyborze najlepszego modelu podejmujemy wyłącznie na podstawie wyników
+na zbiorze WALIDACYJNYM. Zbiór TESTOWY został wykorzystany jedynie do końcowej,
+niezależnej oceny jakości i nie służył do wyboru modelu (aby uniknąć overfittingu).
+
+postanowiliśmy się zdecydować na k=10 jednak jedna ze zmiennych wychodizla z nieinterpretowalnym doatnim współczynnikiem
+wie usunelismy ja(był to zysk netto) i ostatecznie zdecydowaliśmy się na wybor 9 parametrow do naszego modelu. 
+===== MODEL z k = 5 zmiennymi (statsmodels.Logit) =====
+Zmienne:
+  - wsk_mnoznik_kap_wl
+  - wsk_poziom_kapitalu_obrotowego_netto
+  - wsk_koszty_przychody
+  - formaWlasnosci_Symbol
+  - wsk_zadluzenia_pozyczki_dlugie
