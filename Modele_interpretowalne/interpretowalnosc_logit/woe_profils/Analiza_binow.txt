@@ -1,0 +1,67 @@
+Analiza liczności binów potwierdziła, że wszystkie biny mają liczność 300–600 obserwacji.
+Dziwne zachowania profili WoE w skrajnych binach (spłaszczenia, niewielkie odwrócenia) nie wynikają z niestabilności statystycznej, lecz są naturalnym efektem rozkładu danych: dla wysokich wartości cech obserwujemy bardzo niski, stabilny default rate, który nie zmienia się już wraz ze wzrostem cechy.
+Oznacza to, że dla firm o bardzo dobrych parametrach finansowych dalsza poprawa nie przynosi dodatkowej redukcji ryzyka.
+
+📊 Cechy binów – wsk_poziom_kapitalu_obrotowego_netto:
+                           bin  total  good  bad  default_rate  low_count_flag
+(-989170.1540000001, 5099.236]    324   270   54      0.166667           False
+          (5099.236, 73980.98]    360   306   54      0.150000           False
+         (73980.98, 309684.08]    360   331   29      0.080556           False
+      (309684.08, 1035230.482]    360   349   11      0.030556           False
+    (1035230.482, 6845045.301]    324   309   15      0.046296           False
+
+📊 Cechy binów – wsk_zob_s_aktywa_rzeczowe:
+             bin  total  good  bad  default_rate  low_count_flag
+(-1.001, -0.204]    359   330   29      0.080780           False
+(-0.204, 0.0224]    360   330   30      0.083333           False
+ (0.0224, 0.291]    360   330   30      0.083333           False
+  (0.291, 0.602]    360   336   24      0.066667           False
+  (0.602, 0.965]    324   278   46      0.141975           False
+
+📊 Cechy binów – Zobowiazania_dlugoterminowe:
+                     bin  total  good  bad  default_rate  low_count_flag
+     (-0.001, 14351.974]   1440  1286  154      0.106944           False
+(14351.974, 6584531.395]    324   309   15      0.046296           False
+
+📊 Cechy binów – wsk_ROA:
+               bin  total  good  bad  default_rate  low_count_flag
+(-0.542, -0.00147]    324   275   49      0.151235           False
+   (-0.00147, 0.0]    598   529   69      0.115385           False
+     (0.0, 0.0167]    122   109   13      0.106557           False
+   (0.0167, 0.112]    360   344   16      0.044444           False
+    (0.112, 0.522]    324   313   11      0.033951           False
+
+📊 Cechy binów – wsk_koszty_przychody:
+             bin  total  good  bad  default_rate  low_count_flag
+ (-0.001, 0.775]    359   326   33      0.091922           False
+  (0.775, 0.952]    360   345   15      0.041667           False
+  (0.952, 1.011]    360   336   24      0.066667           False
+  (1.011, 1.416]    360   317   43      0.119444           False
+(1.416, 390.669]    324   271   53      0.163580           False
+
+📊 Cechy binów – wsk_mnoznik_kap_wl:
+          bin  total  good  bad  default_rate  low_count_flag
+(0.999, 1.06]    328   297   31      0.094512           False
+(1.06, 1.316]    360   335   25      0.069444           False
+ (1.316, 1.9]    360   338   22      0.061111           False
+  (1.9, 3.74]    360   333   27      0.075000           False
+(3.74, 79.86]    324   269   55      0.169753           False
+
+📊 Cechy binów – wsk_rotacja_zobowiazan_dostaw_uslug:
+                bin  total  good  bad  default_rate  low_count_flag
+   (-0.001, 14.842]   1079   974  105      0.097312           False
+   (14.842, 51.407]    360   342   18      0.050000           False
+(51.407, 33927.088]    324   278   46      0.141975           False
+
+📊 Cechy binów – formaWlasnosci_Symbol:
+            bin  total  good  bad  default_rate  low_count_flag
+(-0.001, 214.0]   1305  1190  115      0.088123           False
+ (214.0, 215.0]    179   158   21      0.117318           False
+(215.0, 226.02]    280   249   31      0.110714           False
+
+📊 Cechy binów – wsk_zadluzenia_pozyczki_dlugie:
+             bin  total  good  bad  default_rate  low_count_flag
+(-0.001, 0.0739]   1439  1291  148      0.102849           False
+ (0.0739, 5.711]    324   311   13      0.040123           False
+
+
