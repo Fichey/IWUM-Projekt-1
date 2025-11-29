@@ -23,6 +23,7 @@ INTERP_LOGIT_DIR = os.path.join(
     "interpretowalnosc_logit",
 )
 FEATURES_TO_DROP_PATH = os.path.join(INTERP_LOGIT_DIR, "logit_features_to_drop.csv")
+FEATURES_TO_DROP_PATH_K5 = os.path.join(INTERP_LOGIT_DIR, "drop_columns_k5.csv")
 
 
 from sklearn.model_selection import train_test_split
@@ -116,6 +117,7 @@ def create_logit_preprocessing_pipeline(
         ("woe", WoETransformer(n_bins=n_bins)),
         ("woe_directionality", WoEDirectionalityFilter(min_corr=-0.01, method="spearman")),
         ("drop_bad_for_logit", DropColumnsTransformer(columns_path=FEATURES_TO_DROP_PATH)),
+        ("drop_unnessesary_for_logit", DropColumnsTransformer(columns_path=FEATURES_TO_DROP_PATH_K5)),
     ]
 
     return Pipeline(steps)

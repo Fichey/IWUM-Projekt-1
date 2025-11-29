@@ -35,6 +35,9 @@ warnings.filterwarnings("ignore")
 #                            CUSTOM METRICS
 # =====================================================================
 
+def gini_from_auc(auc):
+    return 2 * auc - 1
+
 def calculate_ks_statistic(y_true, y_pred_proba):
     """Kolmogorov-Smirnov statistic."""
     data = pd.DataFrame({"y": y_true, "p": y_pred_proba}).sort_values("p")
@@ -114,19 +117,20 @@ def create_decision_tree_grid():
 # =====================================================================
 
 def evaluate_model(model, X, y, model_name="Model", dataset_name="val"):
-    """Liczy wszystkie główne metryki."""
     y_pred_proba = model.predict_proba(X)[:, 1]
 
+    roc = roc_auc_score(y, y_pred_proba)
+    
     return {
         "model_name": model_name,
         "dataset": dataset_name,
-        "roc_auc": roc_auc_score(y, y_pred_proba),
+        "roc_auc": roc,
+        "gini": 2 * roc - 1,
         "pr_auc": average_precision_score(y, y_pred_proba),
         "ks": calculate_ks_statistic(y, y_pred_proba),
         "log_loss": log_loss(y, y_pred_proba),
         "brier": brier_score_loss(y, y_pred_proba),
     }
-
 
 def print_evaluation_table(results):
     df = pd.DataFrame(results)
@@ -255,6 +259,25 @@ def main():
         os.path.join(RESULTS_DIR, "grid_results_tree.csv"),
         index=False,
     )
+    
+    print("\n================ BETA COEFFICIENTS ================\n")
+
+    # pobierz nazwy zmiennych po transformacji WOE + DropColumns
+    woe_feature_names = logit_preproc.get_feature_names_out()
+    
+    # ale DropColumnsTransformer uciął kolumny — więc
+    # pobieramy REALNE nazwy cech po transformacji
+    X_logit_df = pd.DataFrame(X_train_logit)
+    feature_names = list(X_logit_df.columns)
+    
+    # współczynniki
+    betas = best_logit.coef_[0]
+    intercept = best_logit.intercept_[0]
+    
+    print(f"Intercept (β0): {intercept:.6f}\n")
+    
+    for fname, beta in zip(feature_names, betas):
+        print(f"{fname:40s}  β = {beta:.6f}")
 
     print("Zapisano wszystkie modele i wyniki.")
 
