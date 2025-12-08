@@ -188,6 +188,74 @@ def plot_hist(models, out_dir=None):
             plt.close()
 
 
+def plot_roc_logit_tvt(y_train, p_train, y_val, p_val, y_test, p_test,
+                       savepath=None):
+    """
+    ROC curve tylko dla modelu logit (WoE),
+    pokazująca 3 krzywe: train, val, test.
+    """
+    if savepath is None:
+        savepath = os.path.join(PLOTS_DIR, "roc_logit_train_val_test.png")
+
+    plt.figure(figsize=(7, 6))
+
+    for (y, p, label) in [
+        (y_train, p_train, "Train"),
+        (y_val,   p_val,   "Val"),
+        (y_test,  p_test,  "Test"),
+    ]:
+        fpr, tpr, _ = roc_curve(y, p)
+        auc = roc_auc_score(y, p)
+        plt.plot(fpr, tpr, label=f"{label} (AUC={auc:.3f})")
+
+    plt.plot([0, 1], [0, 1], "--", label="Losowy model")
+    plt.xlabel("FPR")
+    plt.ylabel("TPR")
+    plt.title("ROC curve – Logit (WoE): train / val / test")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(savepath, dpi=150)
+    plt.close()
+
+
+def plot_pr_logit_tvt(y_train, p_train, y_val, p_val, y_test, p_test,
+                      savepath=None):
+    """
+    Precision–Recall curve tylko dla logitu,
+    z krzywymi dla train, val, test.
+    W legendzie podajemy AP (area under PR curve).
+    """
+    if savepath is None:
+        savepath = os.path.join(PLOTS_DIR, "pr_logit_train_val_test.png")
+
+    plt.figure(figsize=(7, 6))
+
+    for (y, p, label) in [
+        (y_train, p_train, "Train"),
+        (y_val,   p_val,   "Val"),
+        (y_test,  p_test,  "Test"),
+    ]:
+        prec, rec, _ = precision_recall_curve(y, p)
+        ap = average_precision_score(y, p)
+        plt.plot(rec, prec, label=f"{label} (AP={ap:.3f})")
+
+    # baseline wg częstości klasy pozytywnej w train
+    baseline = y_train.mean()
+    plt.hlines(baseline, 0, 1, linestyles="--",
+               label=f"Baseline (train pos={baseline:.3f})")
+
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("PR curve – Logit (WoE): train / val / test")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(savepath, dpi=150)
+    plt.close()
+
+
+
 # =====================================================================
 #                                MAIN
 # =====================================================================
@@ -265,7 +333,52 @@ def main():
 
     print(" Wygenerowano wykresy dla logitu i drzewca!")
     print(f"   Pliki zapisane w: {PLOTS_DIR}")
+    
 
+    X_train_logit = preproc_logit.transform(X_train)
+    X_val_logit   = preproc_logit.transform(X_val)
+    X_test_logit  = preproc_logit.transform(X_test)
+
+    X_val_tree = preproc_tree.transform(X_val)
+    X_test_tree = preproc_tree.transform(X_test)
+
+    # predykcje logit
+    p_train_logit = logit.predict_proba(X_train_logit)[:, 1]
+    p_val_logit   = logit.predict_proba(X_val_logit)[:, 1]
+    p_test_logit  = logit.predict_proba(X_test_logit)[:, 1]
+
+    # predykcje tree
+    p_val_tree  = tree.predict_proba(X_val_tree)[:, 1]
+    p_test_tree = tree.predict_proba(X_test_tree)[:, 1]
+
+    # =====================================================================
+    #                          WYKRESY
+    # =====================================================================
+    print("\n Rysuję ROC (logit vs tree)...")
+    plot_roc(MODELE)
+
+    print(" Rysuję PR (logit vs tree)...")
+    plot_pr(MODELE)
+
+    print(" Rysuję calibration (logit vs tree)...")
+    plot_calibration(MODELE)
+
+    print(" Rysuję histogramy PD (logit vs tree)...")
+    plot_hist(MODELE)
+
+    # --- nowe wykresy: tylko logit, 3 zbiory: train / val / test ---
+    print(" Rysuję ROC – tylko logit (train/val/test)...")
+    plot_roc_logit_tvt(y_train, p_train_logit,
+                       y_val,   p_val_logit,
+                       y_test,  p_test_logit)
+
+    print(" Rysuję PR – tylko logit (train/val/test)...")
+    plot_pr_logit_tvt(y_train, p_train_logit,
+                      y_val,   p_val_logit,
+                      y_test,  p_test_logit)
+
+    print(" Wygenerowano wykresy dla logitu i drzewca!")
+    print(f"   Pliki zapisane w: {PLOTS_DIR}")
 
 if __name__ == "__main__":
     main()
