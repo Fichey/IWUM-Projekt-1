@@ -4,6 +4,7 @@ import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
 import sys
+import shap
 
 # ============================================================
 #                KONFIGURACJA ŚCIEŻEK
@@ -20,6 +21,8 @@ if PROJECT_ROOT not in sys.path:
 
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 INTERP_DIR = os.path.join(BASE_DIR, "interpretowalnosc_logit")
+SHAP_DIR = os.path.join(INTERP_DIR, "shap_beeswarm")
+
 
 DATA_PATH = os.path.join(PROJECT_ROOT, "zbiór_7.csv")
 PREPROC_DIR = os.path.join(PROJECT_ROOT, "EDA", "preprocesing_pipelines")
@@ -36,6 +39,8 @@ os.makedirs(INTERP_DIR, exist_ok=True)
 os.makedirs(WYKRESY_DIR, exist_ok=True)
 os.makedirs(PDP_DIR, exist_ok=True)
 os.makedirs(ICE_DIR, exist_ok=True)
+os.makedirs(SHAP_DIR, exist_ok=True)
+
 
 INTERP_LOCAL_DIR = os.path.join(INTERP_DIR, "interpretowalnosc_lokalna")
 os.makedirs(INTERP_LOCAL_DIR, exist_ok=True)
@@ -687,6 +692,69 @@ def compute_local_decomposition_for_9_cases(logit, df_coef):
     df_all_top10.to_csv(contrib_path, index=False)
     print(f" Zapisano top 9 wkładów cech dla 9 przypadków  {contrib_path}")
 
+# ============================================================
+#                   SHAP – BEESWARM PLOTS
+# ============================================================
+
+def _ensure_shap_array(shap_values):
+    """
+    Ujednolica format shap_values:
+      - gdy shap zwraca listę (np. [class0, class1]), bierzemy shap dla klasy 1,
+      - gdy zwraca od razu tablicę (n_obs, n_features), zwracamy ją bez zmian.
+    """
+    if isinstance(shap_values, list):
+        # zakładamy binarną klasyfikację i bierzemy SHAP dla klasy pozytywnej
+        return shap_values[1]
+    return shap_values
+
+
+def generate_shap_beeswarm_for_splits(logit, preproc_logit):
+    """
+    Liczy wartości SHAP dla modelu logit (WoE) i rysuje
+    3 wykresy beeswarm:
+        • train,
+        • val,
+        • test,
+    zgodnie z podziałem 60/20/20 używanym w projekcie.
+    Wykresy zapisuje do katalogu SHAP_DIR.
+    """
+    print("\n Liczę wartości SHAP i generuję wykresy beeswarm (train/val/test)...")
+
+    # 1. Pobieramy podziały danych (dokładnie jak w projekcie)
+    X_train, X_val, X_test, y_train, y_val, y_test = get_data_splits_for_local()
+
+    # 2. Przepuszczamy przez pipeline WoE i porządkujemy kolumny
+    X_train_tr = transform_to_feature_df(preproc_logit, logit, X_train)
+    X_val_tr   = transform_to_feature_df(preproc_logit, logit, X_val)
+    X_test_tr  = transform_to_feature_df(preproc_logit, logit, X_test)
+
+    # 3. Tworzymy explainer na bazie zbioru treningowego
+    explainer = shap.LinearExplainer(logit, X_train_tr)
+
+    shap_values_train = _ensure_shap_array(explainer.shap_values(X_train_tr))
+    shap_values_val   = _ensure_shap_array(explainer.shap_values(X_val_tr))
+    shap_values_test  = _ensure_shap_array(explainer.shap_values(X_test_tr))
+
+    # 4. Funkcja pomocnicza do rysowania i zapisu
+    def _plot_and_save_beeswarm(shap_vals, X_tr, split_name):
+        plt.figure()
+        shap.summary_plot(
+            shap_vals,
+            X_tr,
+            feature_names=logit.feature_names_in_,
+            plot_type="dot",   # klasyczny beeswarm
+            show=False
+        )
+        plt.tight_layout()
+        out_path = os.path.join(SHAP_DIR, f"shap_beeswarm_{split_name}.png")
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"   Zapisano SHAP beeswarm dla {split_name}: {out_path}")
+
+    # 5. Generujemy wykresy dla train/val/test
+    _plot_and_save_beeswarm(shap_values_train, X_train_tr, "train")
+    _plot_and_save_beeswarm(shap_values_val,   X_val_tr,   "val")
+    _plot_and_save_beeswarm(shap_values_test,  X_test_tr,  "test")
 
 # ============================================================
 #                           MAIN
@@ -728,6 +796,9 @@ def main():
     
     # Lokalna interpretacja – 5 obserwacji
     compute_local_decomposition_for_9_cases(logit, df_coef)
+
+    # ---------- SHAP beeswarm (train/val/test) ----------
+    generate_shap_beeswarm_for_splits(logit, preproc_logit)
 
 if __name__ == "__main__":
     main()

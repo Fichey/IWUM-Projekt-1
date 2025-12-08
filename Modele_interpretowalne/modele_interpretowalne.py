@@ -233,6 +233,7 @@ def main():
     results = []
 
     # logit
+    results.append(evaluate_model(best_logit, X_train_logit, y_train, "Logit_WoE", "train"))
     results.append(evaluate_model(best_logit, X_val_logit, y_val, "Logit_WoE", "val"))
     results.append(evaluate_model(best_logit, X_test_logit, y_test, "Logit_WoE", "test"))
 
